@@ -76,7 +76,7 @@ We reject black-box shortcuts and aim to build intuition, one line at a time.
 Dual Master Student at Télécom SudParis & École Polytechnique  
 Research intern in Computational Systems Biology (NAIST, Japan)  
 Founder of WIL™ – Wide-Range Ideas Laboratory  
-[LinkedIn](https://www.linkedin.com/in/pierrechambet)
+[LinkedIn](https://www.linkedin.com/in/pierre-chambet-289a5b220/)
 
 ---
 
