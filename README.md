@@ -26,20 +26,26 @@ Everything is explained, coded, and visualized.
 ### Requirements
 
 You'll need:
-- Python ≥ 3.8
-- `numpy`, `matplotlib`, and either `tensorflow` or `torch`
 
-Install required packages:
+- Python 3.11 (recommended)
+- numpy, matplotlib, and TensorFlow for Apple Silicon
 
+Install on macOS Apple Silicon (recommended):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
 ```
-pip install numpy matplotlib tensorflow
-```
+
+If you prefer PyTorch instead of TensorFlow, tell me and I’ll switch the stack (MPS supported on Apple Silicon).
 
 ### Run the notebook
 
-You can run it locally with:
+Run locally:
 
-```
+```bash
 jupyter notebook mnist.ipynb
 ```
 
@@ -84,3 +90,15 @@ Founder of WIL™ – Wide-Range Ideas Laboratory
 
 This project is released under the MIT License.  
 Feel free to use, remix, or extend it.
+
+---
+
+## CLI runner (optional)
+
+If you prefer a script over the notebook, you can train a simple MLP with:
+
+```bash
+make mlp
+```
+
+Artifacts and curves will be saved to `outputs/`.
