@@ -44,7 +44,7 @@ def _cache(root, split, seeds, budget_fails=()):
     root.mkdir()
     for name, model_seeds in seeds.items():
         for seed in model_seeds:
-            rng = np.random.default_rng([seed, len(name)])
+            rng = np.random.default_rng([seed, *name.encode()])
             _, meta_path, preds_path = run_paths(name, seed, root)
             test_proba = _proba(split.y_test, rng)
             np.savez(
@@ -63,6 +63,7 @@ def _render(tmp_path, monkeypatch, split, seeds, budget_fails=()):
     results, figs = tmp_path / "results", tmp_path / "figures"
     _cache(tmp_path / "interim", split, seeds, budget_fails)
     summary = analyze(tmp_path / "interim", results, split)
+    assert _strict_json(results / "summary.json") == summary
     for module in (figures, report):
         monkeypatch.setattr(module, "RESULTS", results)
         monkeypatch.setattr(module, "FIGURES", figs)
@@ -105,3 +106,14 @@ def test_figures_and_report_say_when_the_budget_was_not_met(tmp_path, monkeypatc
     assert s["models"]["mlp"]["error_budget_error_mean"] is None
     assert "No validation threshold met the error budget for MLP seeds 0, 1, 2; CNN seed 1" in html
     assert "the MLP automates n/a of the test stream" in html
+
+
+def test_single_seed_reports_no_spread(tmp_path, monkeypatch, split):
+    seeds = {"mlp": [3], "cnn": [3], "mlp_wide": [3]}
+    s, html = _render(tmp_path, monkeypatch, split, seeds)
+    for m in s["models"].values():
+        assert m["test_accuracy_std"] is None and m["shift_accuracy_std"] is None
+    assert not re.search(r"\bnan\b", html, re.IGNORECASE)
+    assert "±" not in html
+    mlp_acc = f"{s['models']['mlp']['test_accuracy_mean'] * 100:.2f}%"
+    assert f'The <span class="amber">MLP</span> reaches {mlp_acc},' in html

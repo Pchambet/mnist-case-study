@@ -90,9 +90,10 @@ def hero() -> Path:
     for name in ("mlp", "cnn"):
         m = s["models"][name]
         mean = np.array(m["shift_accuracy_mean"]) * 100
-        std = np.array(m["shift_accuracy_std"]) * 100
         ax2.plot(px, mean, color=COLORS[name], lw=2, marker="o", ms=5)
-        ax2.fill_between(px, mean - std, mean + std, color=COLORS[name], alpha=0.15, lw=0)
+        if m["shift_accuracy_std"] is not None:  # no band for a single seed
+            std = np.array(m["shift_accuracy_std"]) * 100
+            ax2.fill_between(px, mean - std, mean + std, color=COLORS[name], alpha=0.15, lw=0)
         ax2.annotate(
             f"{mean[-1]:.1f}%",
             (px[-1], mean[-1]),

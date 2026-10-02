@@ -66,6 +66,12 @@ def _pct_sig(x: float, sig: int = 2) -> str:
     return f"{float(f'{x * 100:.{sig}g}'):g}%"
 
 
+def _acc(m: dict) -> str:
+    """Mean test accuracy, with the sd across seeds when there are at least two."""
+    sd = m["test_accuracy_std"]
+    return _pct(m["test_accuracy_mean"]) + ("" if sd is None else f" ± {_pct(sd)}")
+
+
 def _budget(m: dict) -> tuple[str, str, str]:
     """Automated share, realised error and manual share under the budget; n/a if no seed met it."""
     cov, err = m["error_budget_coverage_mean"], m["error_budget_error_mean"]
@@ -108,10 +114,11 @@ def build_report(out: Path = SITE) -> Path:
     replacements = {
         "__DATA__": json.dumps(_chart_data()),
         "__SUMMARY__": json.dumps(s),
-        "__MLP_ACC__": _pct(mlp["test_accuracy_mean"]),
-        "__MLP_STD__": _pct(mlp["test_accuracy_std"]),
-        "__CNN_ACC__": _pct(cnn["test_accuracy_mean"]),
-        "__CNN_STD__": _pct(cnn["test_accuracy_std"]),
+        "__MLP_ACC__": _acc(mlp),
+        "__CNN_ACC__": _acc(cnn),
+        "__ACC_NOTE__": "mean ± sd across seeds"
+        if mlp["test_accuracy_std"] is not None and cnn["test_accuracy_std"] is not None
+        else "mean across seeds; an sd needs at least two",
         "__MLP_ERR__": f"{mlp['test_errors_mean']:.0f}",
         "__CNN_ERR__": f"{cnn['test_errors_mean']:.0f}",
         "__GAIN__": f"{cmp_['accuracy_gain_cnn_minus_mlp'] * 100:.2f}",
@@ -141,8 +148,7 @@ def build_report(out: Path = SITE) -> Path:
         "__SPREAD__": str(max(_spread(m) for m in ("mlp", "cnn"))),
         "__GAP__": f"{mlp['test_errors_mean'] - cnn['test_errors_mean']:.0f}",
         "__WIDE_PARAMS__": f"{wide['params']:,}",
-        "__WIDE_ACC__": _pct(wide["test_accuracy_mean"]),
-        "__WIDE_STD__": _pct(wide["test_accuracy_std"]),
+        "__WIDE_ACC__": _acc(wide),
         "__WIDE_ERR__": f"{wide['test_errors_mean']:.0f}",
         "__WIDE_SHIFT2__": _pct(wide["shift_accuracy_mean"][2], 1),
         "__WIDE_COV__": _budget(wide)[0],
@@ -236,8 +242,8 @@ paired statistics, calibration, robustness to shifted inputs, and a concrete aut
 <h2>1. Accuracy, with the noise measured</h2>
 <p>Both models are trained __NSEEDS__ times (different initialisation and batch order) on the same
 54,000-image training split, early-stopped on a stratified 6,000-image validation split, and scored once
-on the untouched 10,000-image test set. The <span class="amber">MLP</span> reaches __MLP_ACC__ ± __MLP_STD__,
-the <span class="teal">CNN</span> __CNN_ACC__ ± __CNN_STD__ (mean ± sd across seeds).</p>
+on the untouched 10,000-image test set. The <span class="amber">MLP</span> reaches __MLP_ACC__,
+the <span class="teal">CNN</span> __CNN_ACC__ (__ACC_NOTE__).</p>
 <div id="c-errors" class="chart" style="height:240px"></div>
 <p class="takeaway">Within the MLP or the CNN, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
 <p>Is the gap real or test-set luck? Two paired checks on the same 10,000 images. A paired bootstrap over
@@ -250,7 +256,7 @@ __PMAX__.</p>
 <tbody>__MC_ROWS__</tbody></table></div>
 <p><strong>Capacity or convolution?</strong> The CNN has about twice the MLP's parameters. A wider MLP
 (784-256-128-10, __WIDE_PARAMS__ parameters, more than the CNN) trained with the same recipe reaches
-__WIDE_ACC__ ± __WIDE_STD__, i.e. __WIDE_ERR__ errors: no better than the small MLP. The CNN beats it by
+__WIDE_ACC__, i.e. __WIDE_ERR__ errors: no better than the small MLP. The CNN beats it by
 +__CAP_GAIN__ points (95% CI __CAP_LO__ to __CAP_HI__; largest McNemar p over seeds __CAP_PMAX__), and the wide MLP
 is no more tolerant of shifts (__WIDE_SHIFT2__ at 2 px); under the error budget of section 3 it automates
 __WIDE_COV__ of the stream. Parameter count does not explain the gap.</p>

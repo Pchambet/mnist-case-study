@@ -150,18 +150,20 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS, split: Split | None = Non
 
         shift_acc = np.array(shift_acc)
         met = [b for b in budget_runs if b["threshold"] is not None]
+        # A spread across seeds needs at least two of them; with one it is undefined (null).
+        several = len(seeds) > 1
         correct_by_model[name] = np.mean(correct_seeds, axis=0)
         confusion[name] = cm.tolist()
         summary["models"][name] = {
             "seeds": seeds,
             "params": runs[-1][2],
             "test_accuracy_mean": _r(np.mean(accs)),
-            "test_accuracy_std": _r(np.std(accs, ddof=1)),
+            "test_accuracy_std": _r(np.std(accs, ddof=1)) if several else None,
             "test_errors_mean": _r(len(y_test) * (1 - np.mean(accs)), 1),
             "ece_mean": _r(np.mean(eces)),
             "nll_mean": _r(np.mean(nlls)),
             "shift_accuracy_mean": [_r(a) for a in shift_acc.mean(0)],
-            "shift_accuracy_std": [_r(a) for a in shift_acc.std(0, ddof=1)],
+            "shift_accuracy_std": [_r(a) for a in shift_acc.std(0, ddof=1)] if several else None,
             "error_budget_runs": budget_runs,
             # Seeds whose validation set allowed no threshold; left out of the two means below.
             "error_budget_failed_seeds": [b["seed"] for b in budget_runs if b["threshold"] is None],
