@@ -1,34 +1,17 @@
-name: CI (minimal smoke)
-
+name: ci
 on:
   push:
+    branches: [main]
   pull_request:
-
 jobs:
-  smoke:
-    name: Python syntax check
+  check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
-          python-version: '3.11'
-
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install dev tools (ruff)
-        run: pip install -r requirements-dev.txt
-
-      - name: Compile all Python files (no heavy deps)
-        run: python -m compileall -q .
-
-      - name: Ruff lint (py files only)
-        run: ruff check --exclude "*.ipynb" .
-
-      - name: Summary
-        run: |
-          echo "Minimal CI passed: syntax OK."
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
