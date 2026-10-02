@@ -79,11 +79,13 @@ def hero() -> Path:
         mean = np.mean(errs)
         ax1.barh(i, mean, color=color, height=0.55, alpha=0.9)
         ax1.scatter(errs, [i] * len(errs), color=INK, s=14, zorder=3)
-        ax1.text(max(errs) + 8, i, f"{mean:.0f} errors", va="center", color=INK, fontsize=10)
+        # Inside the bar, away from the seed dots near its end, so the label reads as the mean.
+        ax1.text(6, i, f"{mean:.0f} errors", va="center", color="white", fontsize=10, weight="bold")
     ax1.set_yticks(range(len(bars)), [label for _, label, _ in bars])
     ax1.set_xlabel("Misclassified test digits (of 10,000); dots = seeds")
     ax1.set_xlim(0, max(int(r["test_errors"]) for r in runs) * 1.35)
     ax1.grid(axis="y", visible=False)
+    ax1.set_axisbelow(True)  # grid lines behind the bars, not across the labels
     ax1.set_title("Clean test set\n(doubling the MLP's width does not help)")
 
     px = np.arange(len(s["models"]["mlp"]["shift_accuracy_mean"]))
@@ -102,13 +104,12 @@ def hero() -> Path:
             va="center",
             color=INK,
         )
-        ax2.text(
-            px[1] + 0.05,
-            mean[1] + (2 if name == "cnn" else -5),
-            name.upper(),
-            color=COLORS[name],
-            fontweight="bold",
-        )
+        # CNN above its line at 1 px; MLP below-left of its 2 px point, clear of its steep segment.
+        if name == "cnn":
+            x, y, ha, va = px[1] + 0.05, mean[1] + 2, "left", "bottom"
+        else:
+            x, y, ha, va = px[2] - 0.08, mean[2] - 4, "right", "top"
+        ax2.text(x, y, name.upper(), color=COLORS[name], fontweight="bold", ha=ha, va=va)
     ax2.set_xticks(px)
     ax2.set_xlabel("Translation of the test digit (pixels, averaged over 8 directions)")
     ax2.set_ylabel("Test accuracy (%)")
