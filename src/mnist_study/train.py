@@ -1,7 +1,8 @@
 """Train each (model, seed) pair once and store its predictions.
 
-Each run is cached under `data/interim/`: re-running the pipeline only trains
-what is missing, so an interrupted run resumes instead of starting over.
+Each run is cached under `data/interim/` with the config it was trained with:
+re-running the pipeline only trains what is missing or was trained with another
+config, so an interrupted run resumes instead of starting over.
 """
 
 from __future__ import annotations
@@ -95,6 +96,14 @@ def predict_one(name: str, seed: int, split: Split, cfg: TrainConfig, root: Path
     return preds_path
 
 
+def _cached_config(name: str, seed: int, root: Path = INTERIM) -> dict | None:
+    """Config of a finished cached run (its meta is written last), or None if there is none."""
+    model_path, meta_path, _ = run_paths(name, seed, root)
+    if not (model_path.exists() and meta_path.exists()):
+        return None
+    return json.loads(meta_path.read_text()).get("config", {})
+
+
 def run_all(
     split: Split,
     seeds: list[int],
@@ -102,11 +111,26 @@ def run_all(
     names=MODEL_NAMES + CONTROL_NAMES,
     root: Path = INTERIM,
 ) -> None:
+    wanted = asdict(cfg)
     for name in names:
         for seed in seeds:
-            model_path, meta_path, preds_path = run_paths(name, seed, root)
-            if not (model_path.exists() and meta_path.exists()):
-                print(f"[train] {name} seed={seed}", flush=True)
+            _, meta_path, preds_path = run_paths(name, seed, root)
+            cached = _cached_config(name, seed, root)
+            if cached != wanted:
+                if cached is None:
+                    print(f"[train] {name} seed={seed}", flush=True)
+                else:
+                    changed = ", ".join(
+                        f"{k} {cached.get(k)} -> {wanted.get(k)}"
+                        for k in wanted | cached
+                        if cached.get(k) != wanted.get(k)
+                    )
+                    print(f"[retrain] {name} seed={seed}: config changed ({changed})", flush=True)
+                # Drop the old meta and predictions first: if training is interrupted, the
+                # next run must not take the new weights for a finished run or keep stale
+                # predictions next to them.
+                meta_path.unlink(missing_ok=True)
+                preds_path.unlink(missing_ok=True)
                 train_one(name, seed, split, cfg, root)
             if not preds_path.exists():
                 print(f"[predict] {name} seed={seed}", flush=True)

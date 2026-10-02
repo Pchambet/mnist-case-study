@@ -143,9 +143,10 @@ make report    # writes site/index.html
 
 `make run` took about 21 minutes wall-clock on a 10-core Apple Silicon laptop limited to 3 TensorFlow
 threads and shared with other jobs (18 minutes for the MLP and CNN, 3 for the wide-MLP control; peak memory
-about 0.8 GB, about 26 MB of cached models and predictions in `data/interim/`). Runs are cached per model and seed, so an interrupted run resumes. `make test` runs the
-offline test suite on a committed 800-digit fixture, `make lint` runs ruff, and `make notebooks`
-re-executes both walkthroughs.
+about 0.8 GB, about 26 MB of cached models and predictions in `data/interim/`). Runs are cached per
+model, seed and training config, so an interrupted run resumes and a changed config (e.g. `--max-epochs`)
+retrains the affected runs and their predictions. `make test` runs the offline test suite on a committed
+800-digit fixture, `make lint` runs ruff, and `make notebooks` re-executes both walkthroughs.
 
 ## Repository layout
 
