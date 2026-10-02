@@ -81,7 +81,8 @@ def test_threshold_respects_budget_and_ties():
     assert M.threshold_for_budget(conf, correct, 0.2) == 0.80
     assert M.selective(conf, correct, 0.80) == (5 / 6, 0.2)
     assert M.threshold_for_budget(np.array([0.9]), np.array([False]), 0.0) == math.inf
-    assert M.selective(conf, correct, math.inf) == (0.0, 0.0)
+    cov, err = M.selective(conf, correct, math.inf)
+    assert cov == 0.0 and math.isnan(err)
 
 
 def test_confusions():

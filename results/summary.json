@@ -51,6 +51,7 @@
           "oracle_test_coverage": 0.8199
         }
       ],
+      "error_budget_failed_seeds": [],
       "error_budget_coverage_mean": 0.6821,
       "error_budget_error_mean": 0.000146,
       "error_budget_oracle_coverage_mean": 0.824133,
@@ -131,6 +132,7 @@
           "oracle_test_coverage": 0.929
         }
       ],
+      "error_budget_failed_seeds": [],
       "error_budget_coverage_mean": 0.9075,
       "error_budget_error_mean": 0.000588,
       "error_budget_oracle_coverage_mean": 0.9343,
@@ -211,6 +213,7 @@
           "oracle_test_coverage": 0.8213
         }
       ],
+      "error_budget_failed_seeds": [],
       "error_budget_coverage_mean": 0.749633,
       "error_budget_error_mean": 0.000391,
       "error_budget_oracle_coverage_mean": 0.835633,

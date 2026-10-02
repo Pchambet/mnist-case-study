@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 
 from mnist_study import metrics as M
-from mnist_study.data import load_split
+from mnist_study.data import Split, load_split
 from mnist_study.models import CONTROL_NAMES, MODEL_NAMES
 from mnist_study.train import INTERIM, run_paths
 
@@ -39,8 +40,33 @@ def _r(x: float, nd: int = 6) -> float:
     return round(float(x), nd)
 
 
-def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
-    split = load_split()
+def _mean(values: list[float]) -> float | None:
+    return _r(np.mean(values)) if values else None
+
+
+def _budget_run(
+    seed: int, val_proba: np.ndarray, y_val: np.ndarray, conf: np.ndarray, correct: np.ndarray
+) -> dict:
+    """Error-budget rule for one run: threshold fixed on validation, then applied to test.
+
+    If no validation threshold meets the budget, the rule fails: threshold, coverage and
+    error are null rather than an automate-nothing run counted as zero error.
+    """
+    run = {"seed": seed, "threshold": None, "test_coverage": None, "test_error": None}
+    thr = M.threshold_for_budget(val_proba.max(1), val_proba.argmax(1) == y_val, ERROR_BUDGET)
+    if math.isfinite(thr):
+        cov, err = M.selective(conf, correct, thr)
+        run.update(threshold=_r(thr), test_coverage=_r(cov), test_error=_r(err))
+    # Hindsight benchmark only: the best threshold had we been allowed to tune on test.
+    oracle_cov, _ = M.selective(conf, correct, M.threshold_for_budget(conf, correct, ERROR_BUDGET))
+    run["oracle_test_coverage"] = _r(oracle_cov)
+    return run
+
+
+def analyze(root: Path = INTERIM, out: Path = RESULTS, split: Split | None = None) -> dict:
+    """Read every cached run under `root`; only the labels of `split` are used."""
+    if split is None:
+        split = load_split()
     y_val, y_test = split.y_val, split.y_test
     out.mkdir(parents=True, exist_ok=True)
 
@@ -74,23 +100,7 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             conf_pool.append(conf)
             cm += M.confusion_matrix(y_test, pred)
 
-            # Error-budget rule: threshold fixed on validation, applied to test.
-            val_correct = val_proba.argmax(1) == y_val
-            thr = M.threshold_for_budget(val_proba.max(1), val_correct, ERROR_BUDGET)
-            cov, err = M.selective(conf, correct, thr)
-            # Hindsight benchmark only: the best threshold had we been allowed to tune on test.
-            oracle_cov, _ = M.selective(
-                conf, correct, M.threshold_for_budget(conf, correct, ERROR_BUDGET)
-            )
-            budget_runs.append(
-                {
-                    "seed": seed,
-                    "threshold": _r(thr),
-                    "test_coverage": _r(cov),
-                    "test_error": _r(err),
-                    "oracle_test_coverage": _r(oracle_cov),
-                }
-            )
+            budget_runs.append(_budget_run(seed, val_proba, y_val, conf, correct))
 
             coverage, risk = M.risk_coverage(conf, correct)
             rc_risk.append(np.interp(COVERAGE_GRID, coverage, risk))
@@ -139,6 +149,7 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             rc_rows.append([name, cov, _r(r)])
 
         shift_acc = np.array(shift_acc)
+        met = [b for b in budget_runs if b["threshold"] is not None]
         correct_by_model[name] = np.mean(correct_seeds, axis=0)
         confusion[name] = cm.tolist()
         summary["models"][name] = {
@@ -152,8 +163,10 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             "shift_accuracy_mean": [_r(a) for a in shift_acc.mean(0)],
             "shift_accuracy_std": [_r(a) for a in shift_acc.std(0, ddof=1)],
             "error_budget_runs": budget_runs,
-            "error_budget_coverage_mean": _r(np.mean([b["test_coverage"] for b in budget_runs])),
-            "error_budget_error_mean": _r(np.mean([b["test_error"] for b in budget_runs])),
+            # Seeds whose validation set allowed no threshold; left out of the two means below.
+            "error_budget_failed_seeds": [b["seed"] for b in budget_runs if b["threshold"] is None],
+            "error_budget_coverage_mean": _mean([b["test_coverage"] for b in met]),
+            "error_budget_error_mean": _mean([b["test_error"] for b in met]),
             "error_budget_oracle_coverage_mean": _r(
                 np.mean([b["oracle_test_coverage"] for b in budget_runs])
             ),
@@ -207,7 +220,8 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
     )
     _write_csv(out / "risk_coverage.csv", ["model", "coverage", "selective_error"], rc_rows)
     (out / "confusion.json").write_text(json.dumps(confusion))
-    (out / "summary.json").write_text(json.dumps(summary, indent=2))
+    # allow_nan=False: NaN or inf would make the file invalid JSON for other readers.
+    (out / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False))
     return summary
 
 

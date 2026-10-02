@@ -120,10 +120,13 @@ def threshold_for_budget(confidence: np.ndarray, correct: np.ndarray, budget: fl
 
 
 def selective(confidence: np.ndarray, correct: np.ndarray, threshold: float) -> tuple[float, float]:
-    """(coverage, error among accepted) for a fixed confidence threshold."""
+    """(coverage, error among accepted) for a fixed confidence threshold.
+
+    If nothing is accepted the error is undefined and returned as NaN, not 0.
+    """
     accept = confidence >= threshold
     if not accept.any():
-        return 0.0, 0.0
+        return 0.0, math.nan
     return float(accept.mean()), float(np.mean(~correct[accept].astype(bool)))
 
 

@@ -13,10 +13,9 @@ from collections import defaultdict
 from pathlib import Path
 
 from mnist_study.analyze import RESULTS
-from mnist_study.figures import FIGURES
+from mnist_study.figures import FIGURES, NAMES, budget_failure_note
 
 SITE = Path("site")
-NAMES = {"mlp": "MLP", "cnn": "CNN", "mlp_wide": "Wide MLP"}
 REPO = "https://github.com/Pchambet/mnist-case-study"
 
 
@@ -67,6 +66,14 @@ def _pct_sig(x: float, sig: int = 2) -> str:
     return f"{float(f'{x * 100:.{sig}g}'):g}%"
 
 
+def _budget(m: dict) -> tuple[str, str, str]:
+    """Automated share, realised error and manual share under the budget; n/a if no seed met it."""
+    cov, err = m["error_budget_coverage_mean"], m["error_budget_error_mean"]
+    if cov is None:
+        return "n/a", "n/a", "n/a"
+    return _pct(cov, 1), _pct_sig(err), _pct(1 - cov, 1)
+
+
 def build_report(out: Path = SITE) -> Path:
     s = json.loads((RESULTS / "summary.json").read_text())
     mlp, cnn, cmp_ = s["models"]["mlp"], s["models"]["cnn"], s["comparison"]
@@ -76,6 +83,9 @@ def build_report(out: Path = SITE) -> Path:
     mc0 = cmp_["mcnemar_per_seed"][0]
     gallery_png = base64.b64encode((FIGURES / "cnn_confident_errors.png").read_bytes()).decode()
     n_seeds = len(cnn["seeds"])
+    mlp_cov, mlp_berr, mlp_man = _budget(mlp)
+    cnn_cov, cnn_berr, cnn_man = _budget(cnn)
+    budget_note = budget_failure_note(s)
     shift_px = len(cnn["shift_accuracy_mean"]) - 1
 
     def conf_list(m: dict) -> str:
@@ -118,13 +128,14 @@ def build_report(out: Path = SITE) -> Path:
         "__MLP_SHIFT2__": _pct(mlp["shift_accuracy_mean"][2], 1),
         "__CNN_SHIFT2__": _pct(cnn["shift_accuracy_mean"][2], 1),
         "__BUDGET__": _pct(s["error_budget"], 1),
-        "__MLP_COV__": _pct(mlp["error_budget_coverage_mean"], 1),
-        "__CNN_COV__": _pct(cnn["error_budget_coverage_mean"], 1),
-        "__MLP_BERR__": _pct_sig(mlp["error_budget_error_mean"]),
-        "__CNN_BERR__": _pct_sig(cnn["error_budget_error_mean"]),
+        "__MLP_COV__": mlp_cov,
+        "__CNN_COV__": cnn_cov,
+        "__MLP_BERR__": mlp_berr,
+        "__CNN_BERR__": cnn_berr,
+        "__BUDGET_NOTE__": f" {budget_note}" if budget_note else "",
         "__MLP_ECE__": _pct(mlp["ece_mean"]),
-        "__MLP_MAN__": _pct(1 - mlp["error_budget_coverage_mean"], 1),
-        "__CNN_MAN__": _pct(1 - cnn["error_budget_coverage_mean"], 1),
+        "__MLP_MAN__": mlp_man,
+        "__CNN_MAN__": cnn_man,
         "__MLP_ORACLE__": _pct(mlp["error_budget_oracle_coverage_mean"], 1),
         "__CNN_ORACLE__": _pct(cnn["error_budget_oracle_coverage_mean"], 1),
         "__SPREAD__": str(max(_spread(m) for m in ("mlp", "cnn"))),
@@ -134,7 +145,7 @@ def build_report(out: Path = SITE) -> Path:
         "__WIDE_STD__": _pct(wide["test_accuracy_std"]),
         "__WIDE_ERR__": f"{wide['test_errors_mean']:.0f}",
         "__WIDE_SHIFT2__": _pct(wide["shift_accuracy_mean"][2], 1),
-        "__WIDE_COV__": _pct(wide["error_budget_coverage_mean"], 1),
+        "__WIDE_COV__": _budget(wide)[0],
         "__CAP_GAIN__": f"{cap['accuracy_gain_cnn_minus_mlp_wide'] * 100:.2f}",
         "__CAP_LO__": f"{cap['bootstrap_95ci'][0] * 100:.2f}",
         "__CAP_HI__": f"{cap['bootstrap_95ci'][1] * 100:.2f}",
@@ -263,7 +274,7 @@ __MLP_BERR__), the CNN __CNN_COV__ (realised error __CNN_BERR__): the manual que
 __CNN_MAN__ of the stream, a far larger gap than the __GAIN__-point accuracy difference suggests. The thresholds are
 conservative: with hindsight (tuning on the test set itself, which a real deployment cannot do) the same
 budget would allow __MLP_ORACLE__ and __CNN_ORACLE__. The 6,000-digit validation split simply contains few
-errors to calibrate a 0.1% threshold on, and the MLP pays more for that caution.</p>
+errors to calibrate a 0.1% threshold on, and the MLP pays more for that caution.__BUDGET_NOTE__</p>
 
 <h2>4. Can the confidences be trusted?</h2>
 <p>Expected calibration error (15 equal-width bins, mean over seeds): MLP __MLP_ECE__, CNN __CNN_ECE__.
@@ -342,7 +353,7 @@ function draw() {
   const rc = models.map(m => ({ type: "scatter", mode: "lines", name: NAME[m],
     x: D.rc[m].x.map(v => v * 100), y: D.rc[m].y.map(v => v * 100), line: { color: C[m], width: 2 },
     hovertemplate: NAME[m] + ": accept %{x:.1f}% → error %{y:.3f}%<extra></extra>" }));
-  models.forEach(m => rc.push({ type: "scatter", mode: "markers", showlegend: false,
+  models.filter(m => S.models[m].error_budget_coverage_mean !== null).forEach(m => rc.push({ type: "scatter", mode: "markers", showlegend: false,
     x: [S.models[m].error_budget_coverage_mean * 100], y: [S.models[m].error_budget_error_mean * 100],
     marker: { color: C[m], size: 12, line: { color: css("--bg"), width: 2 } },
     hovertemplate: NAME[m] + " with validation-chosen threshold: %{x:.1f}% automated, error %{y:.3f}%<extra></extra>" }));

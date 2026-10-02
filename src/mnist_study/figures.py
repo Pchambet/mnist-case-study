@@ -21,6 +21,7 @@ FIGURES = Path("docs/figures")
 INK, MUTED, GRID = "#0f172a", "#64748b", "#e2e8f0"
 COLORS = {"mlp": "#d97706", "cnn": "#0d9488"}
 LABELS = {"mlp": "MLP (109k params)", "cnn": "CNN (225k params)"}
+NAMES = {"mlp": "MLP", "cnn": "CNN", "mlp_wide": "Wide MLP"}
 WIDE_LABEL = "Wide MLP (235k params)"
 
 plt.rcParams.update(
@@ -130,6 +131,21 @@ def hero() -> Path:
     return _save(fig, "hero.png")
 
 
+def budget_failure_note(s: dict, names=tuple(NAMES)) -> str:
+    """One sentence naming the runs where no validation threshold met the budget, or ''."""
+    failed = [
+        f"{NAMES[name]} seed{'s' * (len(seeds) > 1)} {', '.join(map(str, seeds))}"
+        for name in names
+        if (seeds := s["models"][name]["error_budget_failed_seeds"])
+    ]
+    if not failed:
+        return ""
+    return (
+        f"No validation threshold met the error budget for {'; '.join(failed)}: such runs "
+        "would automate nothing and are left out of the coverage and error means."
+    )
+
+
 def risk_coverage() -> Path:
     s = _summary()
     curves = defaultdict(lambda: ([], []))
@@ -142,15 +158,18 @@ def risk_coverage() -> Path:
     for name, (cov, err) in curves.items():
         ax.plot(cov, err, color=COLORS[name], lw=2, label=LABELS[name])
         m = s["models"][name]
+        if m["error_budget_coverage_mean"] is None:  # no seed met the budget on validation
+            continue
         c, e = m["error_budget_coverage_mean"] * 100, m["error_budget_error_mean"] * 100
         ax.scatter([c], [e], color=COLORS[name], s=60, zorder=3, edgecolor="white", lw=1.5)
     # A text key instead of arrows: any arrow to the CNN point would cross the MLP curve.
     cov = {m: s["models"][m]["error_budget_coverage_mean"] for m in ("mlp", "cnn")}
+    shown = {m: "none" if c is None else f"{c:.1%}" for m, c in cov.items()}
     ax.text(
         51,
         0.56,
         "Dots: threshold chosen on validation, applied to test\n"
-        f"MLP {cov['mlp']:.1%} automated · CNN {cov['cnn']:.1%}",
+        f"MLP {shown['mlp']} automated · CNN {shown['cnn']}",
         color=INK,
         fontsize=9.5,
         va="top",
@@ -171,10 +190,15 @@ def risk_coverage() -> Path:
     ax.set_xlim(50, 100)
     ax.set_ylim(0, 0.8)
     ax.legend(frameon=False, loc="upper left")
-    ax.set_title(
-        f"Holding errors to ≤{budget:.1f}%, the CNN reads {cov['cnn']:.0%} of digits "
-        f"automatically, the MLP {cov['mlp']:.0%}"
-    )
+    if None in cov.values():
+        ax.set_title(f"Coverage when errors are held to ≤{budget:.1f}%")
+    else:
+        ax.set_title(
+            f"Holding errors to ≤{budget:.1f}%, the CNN reads {cov['cnn']:.0%} of digits "
+            f"automatically, the MLP {cov['mlp']:.0%}"
+        )
+    if note := budget_failure_note(s, ("mlp", "cnn")):
+        fig.text(0.01, -0.02, note, color=MUTED, fontsize=9, va="top", wrap=True)
     return _save(fig, "risk_coverage.png")
 
 
