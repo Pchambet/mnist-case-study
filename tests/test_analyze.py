@@ -138,3 +138,11 @@ def test_models_without_a_common_seed_fail_clearly(tmp_path, split):
     _cache(tmp_path / "interim", split, {"mlp": [0], "cnn": [1], "mlp_wide": [1]})
     with pytest.raises(ValueError, match="mlp and cnn share no seed"):
         analyze(tmp_path / "interim", tmp_path / "results", split)
+
+
+def test_budget_shares_add_up_to_100_after_rounding():
+    # 90.75% automated must not print as 90.8% automated and 9.3% manual.
+    auto, _, manual = report._budget(
+        {"error_budget_coverage_mean": 0.9075, "error_budget_error_mean": 0.00059}
+    )
+    assert float(auto.rstrip("%")) + float(manual.rstrip("%")) == pytest.approx(100.0)

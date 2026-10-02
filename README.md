@@ -16,19 +16,20 @@ error-budget rule that turns accuracy into manual workload.
 - **The CNN makes 48% fewer mistakes.** Mean of 3 seeds on the 10,000-digit test set: MLP 97.71% ± 0.02%
   (229 errors), CNN 98.81% ± 0.11% (119 errors). Paired bootstrap gain +1.11 points, 95% CI [0.90, 1.32];
   exact McNemar p < 1e-12 on every seed.
-- **Capacity is not the explanation.** A wider MLP with more parameters than the CNN (235k against 225k),
-  trained the same way, makes 230 errors, no fewer than the 109k MLP. The CNN beats it by +1.12 points,
-  95% CI [0.92, 1.32].
+- **More parameters alone do not close the gap.** A wider MLP with more parameters than the CNN (235k
+  against 225k), trained the same way, makes 230 errors, no fewer than the 109k MLP. The CNN beats it by
+  +1.12 points, 95% CI [0.92, 1.32].
 - **Accuracy understates the operational gap.** Under a budget of at most 1 error per 1,000 automatically
   read digits, with the confidence threshold fixed on validation data, the MLP can automate 68.2% of the
-  test stream and the CNN 90.8%: the manual queue shrinks from 31.8% to 9.3%.
+  test stream and the CNN 90.8%: the manual queue shrinks from 31.8% to 9.2%.
 - **Convolution gives tolerance to small shifts, not invariance.** Moving each digit by 2 px drops the MLP
   to 71.0% and the CNN to 89.8%; at 4 px both collapse (19.9% and 42.4%).
-- **Both models are well calibrated** (expected calibration error 0.48% and 0.24%), so the softmax score
-  can be read as a probability. The threshold rule itself only needs the ranking of confidences and is set
-  on validation.
-- **The hardest digits are shared.** The CNN's 12 most confident mistakes are all misread the same way by
-  the MLP; 4→9 is the top confusion for both.
+- **Both models are well calibrated on clean test digits** (expected calibration error 0.48% and 0.24%),
+  but over 93% of digits sit in the top confidence bin, which keeps that number low; the mid-range bins are
+  mostly overconfident, by up to 7 points. The threshold rule itself only needs the ranking of
+  confidences and is set on validation.
+- **The hardest digits are shared.** The CNN's 12 most confident mistakes (seed 0) are all misread the same
+  way by the MLP; 4→9 is the top confusion for both.
 
 ## Why it matters
 
@@ -87,7 +88,7 @@ changing the architecture moves it by 111.
 
 **Capacity or convolution?** The CNN has about twice the MLP's parameters, so a larger dense network might
 close the gap. It does not: doubling both hidden layers (235k parameters, more than the CNN) leaves the
-error count at 230, with a wider seed spread (213 to 263) because one seed stopped early. Against that
+error count at 230, with a wider seed spread (213, 263 and 215 errors for seeds 0, 1 and 2). Against that
 control the CNN's gain is +1.12 points, 95% CI [0.92, 1.32], McNemar p < 1e-11 on every seed, and the
 wide MLP is no more tolerant of shifts (70.9% at 2 px). Under the error budget it automates 75.0% of the
 stream, between the two main models.
@@ -102,8 +103,10 @@ very few errors to set a 0.1% threshold on, and the MLP pays more for that cauti
 ![Reliability diagrams for both models](docs/figures/reliability.png)
 
 **Calibration.** Confidence tracks accuracy closely for both models (diagrams pool the 3 seeds; the ECE
-quoted is the mean over seeds). Over 93% of digits sit in the top bin (confidence above 0.93), which dominates the ECE; the
-sparse low-confidence bins hold only a handful of digits each.
+quoted is the mean over seeds). Over 93% of digits sit in the top bin (confidence above 0.93), which
+dominates the ECE. In the mid-range bins (confidence 0.67 to 0.93) both models are mostly overconfident,
+by up to 7 points (MLP: 0.835 mean confidence for 79% accuracy in one bin), and the sparse low-confidence
+bins hold only a handful of digits each. All of this is measured on clean test digits only.
 
 ![The CNN's most confident mistakes](docs/figures/cnn_confident_errors.png)
 
@@ -177,12 +180,13 @@ site/           static report, deployed with GitHub Pages
   order of size (the CNN has about twice the parameters), not the best of each family.
 - **Architecture and capacity are separated by one control only.** The wide MLP matches the CNN's parameter
   count, not every other difference: both MLPs use dropout and the CNN does not, and no regularisation was
-  tuned for either. Three seeds of one wider shape rule out "more parameters" as the explanation, not
-  every possible dense design.
+  tuned for either. Three seeds of one wider shape, under the same early stopping (patience 2, which ended
+  two of them at epoch 6), show that more parameters alone do not close the gap; they do not rule out every
+  dense design.
 - **The shift test is synthetic.** Rigid, zero-filled translations isolate one property (sensitivity to
   position) rather than reproduce a real capture process. Diagonal directions move d px along each axis
-  (5.7 px in straight-line distance at 4 px). At 4 px about a quarter of shifted digits lose some stroke at
-  the border (98.7% of ink kept on average, against 99.9% at 2 px), so part of the 4 px drop is lost
+  (5.7 px in straight-line distance at 4 px). At 4 px about a third of shifted digits lose some ink at the
+  border and a quarter lose more than 2% (98.7% of ink kept on average, against 99.9% at 2 px), so part of the 4 px drop is lost
   information, not fragility. Training with random shifts is the standard remedy and is not tested here.
 - **The 0.1% threshold is noisy.** It is set on 6,000 validation digits, so about six tolerated errors;
   the realised test error is always reported next to the coverage.

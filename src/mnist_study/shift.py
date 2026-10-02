@@ -4,7 +4,8 @@ MNIST digits are centred by centre of mass in a 28x28 frame with a ~4 px
 margin. Any pixel pushed past the border is dropped and vacated pixels are
 filled with background (0). Diagonal directions move d px along each axis. On
 the test set, 99.9% of the ink survives a 2 px shift and 98.7% a 4 px shift,
-but at 4 px about a quarter of (digit, direction) pairs lose more than 2%.
+but at 4 px about a third of (digit, direction) pairs lose some ink and a
+quarter lose more than 2%.
 """
 
 from __future__ import annotations

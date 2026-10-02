@@ -77,7 +77,8 @@ def _budget(m: dict) -> tuple[str, str, str]:
     cov, err = m["error_budget_coverage_mean"], m["error_budget_error_mean"]
     if cov is None:
         return "n/a", "n/a", "n/a"
-    return _pct(cov, 1), _pct_sig(err), _pct(1 - cov, 1)
+    auto = round(cov * 100, 1)  # manual is 100 minus the rounded share, so the two add up to 100%
+    return f"{auto:.1f}%", _pct_sig(err), f"{100 - auto:.1f}%"
 
 
 def build_report(out: Path = SITE) -> Path:
@@ -261,7 +262,7 @@ __PMAX__.</p>
 __WIDE_ACC__, i.e. __WIDE_ERR__ errors: no better than the small MLP. The CNN beats it by
 +__CAP_GAIN__ points (95% CI __CAP_LO__ to __CAP_HI__; largest McNemar p over seeds __CAP_PMAX__), and the wide MLP
 is no more tolerant of shifts (__WIDE_SHIFT2__ at 2 px); under the error budget of section 3 it automates
-__WIDE_COV__ of the stream. Parameter count does not explain the gap.</p>
+__WIDE_COV__ of the stream. More parameters alone do not explain the gap.</p>
 
 <h2>2. Robustness: move the digit a few pixels</h2>
 <p>MNIST digits are centred by centre of mass. Real inputs rarely are. Each test digit is shifted by
@@ -287,8 +288,9 @@ errors to calibrate a 0.1% threshold on, and the MLP pays more for that caution.
 <h2>4. Can the confidences be trusted?</h2>
 <p>Expected calibration error (15 equal-width bins, mean over seeds): MLP __MLP_ECE__, CNN __CNN_ECE__.
 Points on the diagonal mean "90% confident" is right about 90% of the time. The diagram pools the
-__NSEEDS__ seeds; over 93% of digits fall in the top bin, which dominates the ECE. Good calibration lets the
-score be read as a probability; the threshold rule of section 3 only needs the ranking of confidences.</p>
+__NSEEDS__ seeds; over 93% of digits fall in the top bin, which dominates the ECE. The mid-range bins
+(confidence 0.67 to 0.93) are mostly overconfident, by up to 7 points, and all of this is measured on clean
+test digits only. The threshold rule of section 3 only needs the ranking of confidences.</p>
 <div id="c-rel" class="chart"></div>
 
 <h2>5. Where the errors are</h2>
@@ -307,7 +309,7 @@ score be read as a probability; the threshold rule of section 3 only needs the r
 <li>__NSEEDS__ seeds per model is enough to show the seed spread is small next to the gap, not to estimate it precisely.</li>
 <li>Neither architecture is tuned (no augmentation, no learning-rate schedule, no hyper-parameter search); the comparison is between two textbook models of the same order of size (the CNN has about twice the parameters), not between the best of each family.</li>
 <li>Architecture and capacity are separated by one control only: the wide MLP matches the CNN's parameter count, but both MLPs use dropout and the CNN does not, and no regularisation was tuned for either.</li>
-<li>The translation test is synthetic; it isolates one property (shift sensitivity) rather than modelling a real capture process. Diagonal directions move <em>d</em> px along each axis, and at 4 px about a quarter of shifted digits lose some stroke at the border (98.7% of ink kept on average), so part of the 4 px drop is lost information, not fragility.</li>
+<li>The translation test is synthetic; it isolates one property (shift sensitivity) rather than modelling a real capture process. Diagonal directions move <em>d</em> px along each axis, and at 4 px about a third of shifted digits lose some ink at the border and a quarter lose more than 2% (98.7% of ink kept on average), so part of the 4 px drop is lost information, not fragility.</li>
 <li>The 0.1% budget threshold is set on 6,000 validation digits, i.e. about six tolerated errors, so it is itself noisy; the realised test error is reported next to it.</li>
 </ul>
 
