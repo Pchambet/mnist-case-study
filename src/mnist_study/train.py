@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from mnist_study.data import Split, to_float
-from mnist_study.models import build, configure
+from mnist_study.models import CONTROL_NAMES, MODEL_NAMES, build, configure
 from mnist_study.shift import DIRECTIONS, translate
 
 INTERIM = Path("data/interim")
@@ -96,7 +96,11 @@ def predict_one(name: str, seed: int, split: Split, cfg: TrainConfig, root: Path
 
 
 def run_all(
-    split: Split, seeds: list[int], cfg: TrainConfig, names=("mlp", "cnn"), root: Path = INTERIM
+    split: Split,
+    seeds: list[int],
+    cfg: TrainConfig,
+    names=MODEL_NAMES + CONTROL_NAMES,
+    root: Path = INTERIM,
 ) -> None:
     for name in names:
         for seed in seeds:

@@ -1,7 +1,9 @@
-"""The two architectures under comparison.
+"""The architectures under comparison: an MLP, a CNN and a parameter-matched MLP control.
 
 Both are deliberately small and conventional: the question is what convolution
-buys over a dense network of comparable size, not how far MNIST can be pushed.
+buys over a dense network of the same order of size, not how far MNIST can be pushed.
+The CNN has about twice the MLP's parameters, so a wider MLP with as many parameters
+as the CNN is trained as a capacity control.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 MODEL_NAMES = ("mlp", "cnn")
+CONTROL_NAMES = ("mlp_wide",)
 
 
 def configure(seed: int, threads: int = 3) -> None:
@@ -34,19 +37,26 @@ def configure(seed: int, threads: int = 3) -> None:
         pass
 
 
-def build_mlp(num_classes: int = 10) -> keras.Model:
-    """784-128-64-10 with dropout: the dense baseline from the walkthrough notebook."""
+def build_mlp(
+    num_classes: int = 10, widths: tuple[int, int] = (128, 64), name: str = "mlp"
+) -> keras.Model:
+    """784-128-64-10: same layer sizes as the walkthrough notebook, plus dropout."""
     return keras.Sequential(
         [
             layers.Input(shape=(28, 28)),
             layers.Flatten(),
-            layers.Dense(128, activation="relu"),
+            layers.Dense(widths[0], activation="relu"),
             layers.Dropout(0.2),
-            layers.Dense(64, activation="relu"),
+            layers.Dense(widths[1], activation="relu"),
             layers.Dense(num_classes, activation="softmax"),
         ],
-        name="mlp",
+        name=name,
     )
+
+
+def build_mlp_wide(num_classes: int = 10) -> keras.Model:
+    """784-256-128-10: the same recipe with as many parameters as the CNN (capacity control)."""
+    return build_mlp(num_classes, widths=(256, 128), name="mlp_wide")
 
 
 def build_cnn(num_classes: int = 10) -> keras.Model:
@@ -68,9 +78,9 @@ def build_cnn(num_classes: int = 10) -> keras.Model:
 
 
 def build(name: str, learning_rate: float = 1e-3) -> keras.Model:
-    builders = {"mlp": build_mlp, "cnn": build_cnn}
+    builders = {"mlp": build_mlp, "cnn": build_cnn, "mlp_wide": build_mlp_wide}
     if name not in builders:
-        raise ValueError(f"unknown model {name!r}; expected one of {MODEL_NAMES}")
+        raise ValueError(f"unknown model {name!r}; expected one of {tuple(builders)}")
     model = builders[name]()
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate),

@@ -161,6 +161,86 @@
           16
         ]
       ]
+    },
+    "mlp_wide": {
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "params": 235146,
+      "test_accuracy_mean": 0.976967,
+      "test_accuracy_std": 0.002831,
+      "test_errors_mean": 230.3,
+      "ece_mean": 0.005413,
+      "nll_mean": 0.07613,
+      "shift_accuracy_mean": [
+        0.976967,
+        0.932979,
+        0.708983,
+        0.413179,
+        0.205175
+      ],
+      "shift_accuracy_std": [
+        0.002831,
+        0.009982,
+        0.026064,
+        0.022712,
+        0.015102
+      ],
+      "error_budget_runs": [
+        {
+          "seed": 0,
+          "threshold": 0.998641,
+          "test_coverage": 0.812,
+          "test_error": 0.000493,
+          "oracle_test_coverage": 0.8556
+        },
+        {
+          "seed": 1,
+          "threshold": 0.996178,
+          "test_coverage": 0.7462,
+          "test_error": 0.000536,
+          "oracle_test_coverage": 0.83
+        },
+        {
+          "seed": 2,
+          "threshold": 0.998119,
+          "test_coverage": 0.6907,
+          "test_error": 0.000145,
+          "oracle_test_coverage": 0.8213
+        }
+      ],
+      "error_budget_coverage_mean": 0.749633,
+      "error_budget_error_mean": 0.000391,
+      "error_budget_oracle_coverage_mean": 0.835633,
+      "top_confusions": [
+        [
+          4,
+          9,
+          41
+        ],
+        [
+          5,
+          3,
+          30
+        ],
+        [
+          7,
+          2,
+          26
+        ],
+        [
+          6,
+          0,
+          23
+        ],
+        [
+          9,
+          3,
+          22
+        ]
+      ]
     }
   },
   "comparison": {
@@ -190,6 +270,36 @@
         "only_cnn_correct": 162,
         "both_wrong": 66,
         "p_value": 4.94e-14
+      }
+    ]
+  },
+  "capacity_control": {
+    "accuracy_gain_cnn_minus_mlp_wide": 0.011167,
+    "bootstrap_95ci": [
+      0.009167,
+      0.013233
+    ],
+    "mcnemar_per_seed": [
+      {
+        "seed": 0,
+        "only_mlp_wide_correct": 39,
+        "only_cnn_correct": 145,
+        "both_wrong": 68,
+        "p_value": 1.5e-15
+      },
+      {
+        "seed": 1,
+        "only_mlp_wide_correct": 50,
+        "only_cnn_correct": 183,
+        "both_wrong": 80,
+        "p_value": 5.22e-19
+      },
+      {
+        "seed": 2,
+        "only_mlp_wide_correct": 50,
+        "only_cnn_correct": 146,
+        "both_wrong": 69,
+        "p_value": 4.26e-12
       }
     ]
   },

@@ -13,7 +13,7 @@ import numpy as np
 
 from mnist_study import metrics as M
 from mnist_study.data import load_split
-from mnist_study.models import MODEL_NAMES
+from mnist_study.models import CONTROL_NAMES, MODEL_NAMES
 from mnist_study.train import INTERIM, run_paths
 
 RESULTS = Path("results")
@@ -49,7 +49,7 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
     correct_by_model: dict[str, np.ndarray] = {}
     confusion: dict[str, list] = {}
 
-    for name in MODEL_NAMES:
+    for name in MODEL_NAMES + CONTROL_NAMES:
         seeds = _seeds(name, root)
         accs, eces, nlls, shift_acc, budget_runs, rc_risk = [], [], [], [], [], []
         correct_seeds, conf_pool = [], []
@@ -160,28 +160,22 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             "top_confusions": [list(t) for t in M.top_confusions(cm)],
         }
 
-    diff, lo, hi = M.paired_bootstrap_diff(correct_by_model["mlp"], correct_by_model["cnn"])
-    mlp_seeds, cnn_seeds = summary["models"]["mlp"]["seeds"], summary["models"]["cnn"]["seeds"]
-    mcnemar = []
-    for s in sorted(set(mlp_seeds) & set(cnn_seeds)):
-        a = _test_proba("mlp", s, root).argmax(1) == y_test
-        b = _test_proba("cnn", s, root).argmax(1) == y_test
-        only_mlp, only_cnn, p = M.mcnemar_exact(a, b)
-        mcnemar.append(
-            {
-                "seed": s,
-                "only_mlp_correct": only_mlp,
-                "only_cnn_correct": only_cnn,
-                "both_wrong": int(np.sum(~a & ~b)),
-                "p_value": float(f"{p:.3g}"),
-            }
-        )
-    summary["comparison"] = {
-        "accuracy_gain_cnn_minus_mlp": _r(diff),
-        "bootstrap_95ci": [_r(lo), _r(hi)],
-        "mcnemar_per_seed": mcnemar,
-    }
-    summary["gallery"] = _confident_cnn_mistakes(y_test, min(cnn_seeds), root)
+    summary["comparison"] = _paired(
+        "mlp", "cnn", correct_by_model, summary, y_test, root, "accuracy_gain_cnn_minus_mlp"
+    )
+    # Capacity control: same parameter budget as the CNN, no convolution.
+    summary["capacity_control"] = _paired(
+        "mlp_wide",
+        "cnn",
+        correct_by_model,
+        summary,
+        y_test,
+        root,
+        "accuracy_gain_cnn_minus_mlp_wide",
+    )
+    summary["gallery"] = _confident_cnn_mistakes(
+        y_test, min(summary["models"]["cnn"]["seeds"]), root
+    )
 
     _write_csv(
         out / "runs.csv",
@@ -215,6 +209,35 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
     (out / "confusion.json").write_text(json.dumps(confusion))
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     return summary
+
+
+def _paired(
+    a: str,
+    b: str,
+    correct_by_model: dict[str, np.ndarray],
+    summary: dict,
+    y_test: np.ndarray,
+    root: Path,
+    gain_key: str,
+) -> dict:
+    """Model b against model a on the same test images: bootstrap gain and McNemar per seed."""
+    diff, lo, hi = M.paired_bootstrap_diff(correct_by_model[a], correct_by_model[b])
+    seeds = sorted(set(summary["models"][a]["seeds"]) & set(summary["models"][b]["seeds"]))
+    mcnemar = []
+    for s in seeds:
+        ca = _test_proba(a, s, root).argmax(1) == y_test
+        cb = _test_proba(b, s, root).argmax(1) == y_test
+        only_a, only_b, p = M.mcnemar_exact(ca, cb)
+        mcnemar.append(
+            {
+                "seed": s,
+                f"only_{a}_correct": only_a,
+                f"only_{b}_correct": only_b,
+                "both_wrong": int(np.sum(~ca & ~cb)),
+                "p_value": float(f"{p:.3g}"),
+            }
+        )
+    return {gain_key: _r(diff), "bootstrap_95ci": [_r(lo), _r(hi)], "mcnemar_per_seed": mcnemar}
 
 
 def _test_proba(name: str, seed: int, root: Path) -> np.ndarray:

@@ -10,6 +10,8 @@ def test_parameter_counts_match_hand_calculation():
     assert build("mlp").count_params() == 100_480 + 8_256 + 650
     # CNN: conv 3*3*1*32+32, conv 3*3*32*64+64, dense 5*5*64*128+128, head 128*10+10
     assert build("cnn").count_params() == 320 + 18_496 + 204_928 + 1_290
+    # Wide MLP: 784*256+256 + 256*128+128 + 128*10+10, within 5% of the CNN
+    assert build("mlp_wide").count_params() == 200_960 + 32_896 + 1_290
 
 
 def test_unknown_model_is_rejected():
