@@ -212,9 +212,16 @@ h2 { font-size: 1.3rem; margin: 48px 0 8px; letter-spacing: -0.01em; }
 p, li { color: var(--fg); }
 .lede { color: var(--muted); font-size: 1.1rem; margin: 0 0 28px; }
 a { color: var(--link); }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 24px 0; }
+.kpis { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 24px 0; }
 .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.kpi .v { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+.kpi .v { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+@media (min-width: 560px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+/* Four cards in one row: a step smaller, so every headline number holds on one line. */
+@media (min-width: 820px) {
+  .kpis { grid-template-columns: repeat(4, 1fr); }
+  .kpi { padding: 14px 12px; }
+  .kpi .v { font-size: 1.3rem; }
+}
 .kpi .l { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
 .chart { width: 100%; height: 360px; margin: 8px 0 4px; }
 .takeaway { color: var(--muted); font-size: 0.92rem; margin-top: 0; }
@@ -223,7 +230,7 @@ th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--bor
 th:first-child, td:first-child { text-align: left; }
 th { color: var(--muted); font-weight: 500; }
 .scroll { overflow-x: auto; }
-img.gallery { width: 100%; height: auto; border-radius: 8px; background: #fff; }
+img.gallery { width: 100%; height: auto; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
 code { font-size: 0.9em; background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
 footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; }
 .teal { color: var(--teal); font-weight: 600; } .amber { color: var(--amber); font-weight: 600; }
@@ -247,8 +254,8 @@ paired statistics, calibration, robustness to shifted inputs, and a concrete aut
 54,000-image training split, early-stopped on a stratified 6,000-image validation split, and scored once
 on the untouched 10,000-image test set. The <span class="amber">MLP</span> reaches __MLP_ACC__,
 the <span class="teal">CNN</span> __CNN_ACC__ (__ACC_NOTE__).</p>
-<div id="c-errors" class="chart" style="height:240px"></div>
-<p class="takeaway">Within the MLP or the CNN, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
+<div id="c-errors" class="chart" style="height:280px"></div>
+<p class="takeaway">Bars are the mean over seeds, dots the individual seeds; the wide MLP is the capacity control discussed below. Within the MLP or the CNN, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
 <p>Is the gap real or test-set luck? Two paired checks on the same 10,000 images. A paired bootstrap over
 test images puts the gain at +__GAIN__ points (95% CI __CI_LO__ to __CI_HI__). McNemar's exact test, seed by
 seed, counts the digits only one model gets right: for seed __MC_SEED__, __MC_B__ digits only the MLP gets right
@@ -322,7 +329,7 @@ Built by <a href="https://github.com/Pchambet">Pierre Chambet</a> — decision s
 const D = __DATA__;
 const S = __SUMMARY__;
 const C = { mlp: "#d97706", cnn: "#0d9488" };
-const NAME = { mlp: "MLP", cnn: "CNN" };
+const NAME = { mlp: "MLP", cnn: "CNN", mlp_wide: "Wide MLP" };
 function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 function base(extra) {
   const fg = css("--fg"), muted = css("--muted"), grid = css("--grid");
@@ -341,13 +348,22 @@ function merge(a, b) { for (const k in b) a[k] = (typeof b[k] === "object" && !A
 
 function draw() {
   const models = ["mlp", "cnn"];
-  // 1. errors per seed
-  Plotly.react("c-errors", models.map((m, i) => {
-    const r = D.runs.filter(x => x.model === m);
-    return { type: "scatter", mode: "markers", name: NAME[m], x: r.map(x => +x.test_errors),
-      y: r.map(() => NAME[m]), marker: { color: C[m], size: 12, line: { color: css("--bg"), width: 2 } },
-      text: r.map(x => "seed " + x.seed), hovertemplate: "%{y} %{text}: %{x} errors<extra></extra>" };
-  }), merge(base({ showlegend: false }), { xaxis: { title: "misclassified test digits (of 10,000)", rangemode: "tozero" }, margin: { l: 56 } }), cfg);
+  // 1. errors: mean bar and one dot per seed, with the wide-MLP capacity control between the two.
+  // Seeds are offset vertically, so two seeds with the same error count stay two visible dots.
+  const rows = ["cnn", "mlp_wide", "mlp"], color = m => C[m] || css("--muted");
+  Plotly.react("c-errors", rows.flatMap((m, i) => {
+    const r = D.runs.filter(x => x.model === m), mean = S.models[m].test_errors_mean;
+    return [{ type: "bar", orientation: "h", x: [mean], y: [i], width: 0.6, marker: { color: color(m), opacity: 0.3 },
+      text: [mean.toFixed(0) + " errors"], textposition: "inside", insidetextanchor: "start",
+      textfont: { color: css("--fg") }, hovertemplate: NAME[m] + " mean: %{x:.1f} errors<extra></extra>" },
+      { type: "scatter", mode: "markers", x: r.map(x => +x.test_errors),
+      y: r.map((_, k) => i + (k - (r.length - 1) / 2) * 0.16),
+      marker: { color: color(m), size: 10, line: { color: css("--bg"), width: 1.5 } },
+      text: r.map(x => "seed " + x.seed), hovertemplate: NAME[m] + " %{text}: %{x} errors<extra></extra>" }];
+  }), merge(base({ showlegend: false, barmode: "overlay" }), {
+    xaxis: { title: "misclassified test digits (of 10,000)", rangemode: "tozero" },
+    yaxis: { tickvals: [0, 1, 2], ticktext: rows.map(m => NAME[m]), range: [-0.5, 2.5], showgrid: false, zeroline: false },
+    margin: { l: 80 } }), cfg);
 
   // 2. shift robustness
   Plotly.react("c-shift", models.flatMap(m => {
