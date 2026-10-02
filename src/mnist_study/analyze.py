@@ -188,9 +188,11 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS, split: Split | None = Non
         root,
         "accuracy_gain_cnn_minus_mlp_wide",
     )
-    summary["gallery"] = _confident_cnn_mistakes(
-        y_test, min(summary["models"]["cnn"]["seeds"]), root
-    )
+    gallery_seed = _common_seeds(summary, "mlp", "cnn")[0]
+    summary["gallery"] = {
+        "seed": gallery_seed,
+        "mistakes": _confident_cnn_mistakes(y_test, gallery_seed, root),
+    }
 
     _write_csv(
         out / "runs.csv",
@@ -238,9 +240,8 @@ def _paired(
 ) -> dict:
     """Model b against model a on the same test images: bootstrap gain and McNemar per seed."""
     diff, lo, hi = M.paired_bootstrap_diff(correct_by_model[a], correct_by_model[b])
-    seeds = sorted(set(summary["models"][a]["seeds"]) & set(summary["models"][b]["seeds"]))
     mcnemar = []
-    for s in seeds:
+    for s in _common_seeds(summary, a, b):
         ca = _test_proba(a, s, root).argmax(1) == y_test
         cb = _test_proba(b, s, root).argmax(1) == y_test
         only_a, only_b, p = M.mcnemar_exact(ca, cb)
@@ -254,6 +255,17 @@ def _paired(
             }
         )
     return {gain_key: _r(diff), "bootstrap_95ci": [_r(lo), _r(hi)], "mcnemar_per_seed": mcnemar}
+
+
+def _common_seeds(summary: dict, a: str, b: str) -> list[int]:
+    """Seeds trained for both models, so that they can be compared run by run."""
+    seeds = sorted(set(summary["models"][a]["seeds"]) & set(summary["models"][b]["seeds"]))
+    if not seeds:
+        raise ValueError(
+            f"{a} and {b} share no seed, so they cannot be compared run by run; "
+            "train both with the same --seeds"
+        )
+    return seeds
 
 
 def _test_proba(name: str, seed: int, root: Path) -> np.ndarray:

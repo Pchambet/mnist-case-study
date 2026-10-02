@@ -279,7 +279,7 @@ def _count_phrase(k: int, n: int) -> str:
 def gallery() -> Path:
     s = _summary()
     _, _, x_test, _ = load_npz(RAW_PATH)
-    items = s["gallery"]
+    items = s["gallery"]["mistakes"]
     cols = 6
     rows = int(np.ceil(len(items) / cols))
     fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.45, rows * 1.75))
@@ -297,7 +297,8 @@ def gallery() -> Path:
             color=COLORS["cnn"] if mlp_ok else INK,
         )
     fig.suptitle(
-        f"The CNN's {len(items)} most confident mistakes (seed 0): the MLP makes the same "
+        f"The CNN's {len(items)} most confident mistakes (seed {s['gallery']['seed']}): "
+        "the MLP makes the same "
         f"wrong call on {_count_phrase(sum(it['mlp_pred'] == it['cnn_pred'] for it in items), len(items))}",
         x=0.01,
         ha="left",

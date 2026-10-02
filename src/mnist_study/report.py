@@ -125,6 +125,7 @@ def build_report(out: Path = SITE) -> Path:
         "__CI_LO__": f"{lo * 100:.2f}",
         "__CI_HI__": f"{hi * 100:.2f}",
         "__PMAX__": f"{pmax:.1g}",
+        "__MC_SEED__": str(mc0["seed"]),
         "__MC_B__": str(mc0["only_mlp_correct"]),
         "__MC_C__": str(mc0["only_cnn_correct"]),
         "__MC_BOTH__": str(mc0["both_wrong"]),
@@ -162,6 +163,7 @@ def build_report(out: Path = SITE) -> Path:
         "__MC_ROWS__": mc_rows,
         "__RUN_ROWS__": run_rows,
         "__GALLERY__": gallery_png,
+        "__GALLERY_SEED__": str(s["gallery"]["seed"]),
         "__REPO__": REPO,
     }
     for key, value in replacements.items():
@@ -248,7 +250,7 @@ the <span class="teal">CNN</span> __CNN_ACC__ (__ACC_NOTE__).</p>
 <p class="takeaway">Within the MLP or the CNN, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
 <p>Is the gap real or test-set luck? Two paired checks on the same 10,000 images. A paired bootstrap over
 test images puts the gain at +__GAIN__ points (95% CI __CI_LO__ to __CI_HI__). McNemar's exact test, seed by
-seed, counts the digits only one model gets right: for seed 0, __MC_B__ digits only the MLP gets right
+seed, counts the digits only one model gets right: for seed __MC_SEED__, __MC_B__ digits only the MLP gets right
 versus __MC_C__ only the CNN gets right (__MC_BOTH__ both miss); the largest p-value over seeds is
 __PMAX__.</p>
 <div class="scroll"><table>
@@ -292,7 +294,7 @@ score be read as a probability; the threshold rule of section 3 only needs the r
 <h2>5. Where the errors are</h2>
 <p>Most frequent confusions (true→predicted, summed over seeds). MLP: __MLP_CONF__. CNN: __CNN_CONF__.</p>
 <img class="gallery" alt="Grid of the CNN's twelve most confident misclassified test digits with true label, CNN prediction and MLP prediction" src="data:image/png;base64,__GALLERY__">
-<p class="takeaway">The CNN's most confident mistakes (seed 0), with the MLP's prediction for the same digit. Several are hard to read even for a person, and both models tend to fail on the same digits (see the "both wrong" column above).</p>
+<p class="takeaway">The CNN's most confident mistakes (seed __GALLERY_SEED__), with the MLP's prediction for the same digit. Several are hard to read even for a person, and both models tend to fail on the same digits (see the "both wrong" column above).</p>
 
 <h2>6. Training</h2>
 <div id="c-lc" class="chart" style="height:300px"></div>

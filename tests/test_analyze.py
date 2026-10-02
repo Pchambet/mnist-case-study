@@ -117,3 +117,24 @@ def test_single_seed_reports_no_spread(tmp_path, monkeypatch, split):
     assert "±" not in html
     mlp_acc = f"{s['models']['mlp']['test_accuracy_mean'] * 100:.2f}%"
     assert f'The <span class="amber">MLP</span> reaches {mlp_acc},' in html
+    # Captions name the seed actually shown, not a hard-coded seed 0.
+    assert "for seed 3," in html and "most confident mistakes (seed 3)" in html
+    assert "seed 0" not in html
+
+
+def test_gallery_and_mcnemar_use_seeds_both_models_have(tmp_path, split):
+    seeds = {"mlp": [1, 2], "cnn": [0, 1], "mlp_wide": [1]}
+    _cache(tmp_path / "interim", split, seeds)
+    s = analyze(tmp_path / "interim", tmp_path / "results", split)
+    assert [m["seed"] for m in s["comparison"]["mcnemar_per_seed"]] == [1]
+    assert s["gallery"]["seed"] == 1
+    with np.load(run_paths("mlp", 1, tmp_path / "interim")[2]) as p:
+        mlp_pred = p["test_proba"].argmax(1)
+    assert s["gallery"]["mistakes"]
+    assert all(g["mlp_pred"] == mlp_pred[g["index"]] for g in s["gallery"]["mistakes"])
+
+
+def test_models_without_a_common_seed_fail_clearly(tmp_path, split):
+    _cache(tmp_path / "interim", split, {"mlp": [0], "cnn": [1], "mlp_wide": [1]})
+    with pytest.raises(ValueError, match="mlp and cnn share no seed"):
+        analyze(tmp_path / "interim", tmp_path / "results", split)
