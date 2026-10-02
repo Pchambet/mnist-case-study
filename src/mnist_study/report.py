@@ -16,6 +16,7 @@ from mnist_study.analyze import RESULTS
 from mnist_study.figures import FIGURES
 
 SITE = Path("site")
+NAMES = {"mlp": "MLP", "cnn": "CNN", "mlp_wide": "Wide MLP"}
 REPO = "https://github.com/Pchambet/mnist-case-study"
 
 
@@ -61,9 +62,15 @@ def _pct(x: float, nd: int = 2) -> str:
     return f"{x * 100:.{nd}f}%"
 
 
+def _pct_sig(x: float, sig: int = 2) -> str:
+    """Percentage with `sig` significant digits: 0.000146 -> '0.015%'."""
+    return f"{float(f'{x * 100:.{sig}g}'):g}%"
+
+
 def build_report(out: Path = SITE) -> Path:
     s = json.loads((RESULTS / "summary.json").read_text())
     mlp, cnn, cmp_ = s["models"]["mlp"], s["models"]["cnn"], s["comparison"]
+    wide, cap = s["models"]["mlp_wide"], s["capacity_control"]
     lo, hi = cmp_["bootstrap_95ci"]
     pmax = max(m["p_value"] for m in cmp_["mcnemar_per_seed"])
     mc0 = cmp_["mcnemar_per_seed"][0]
@@ -80,7 +87,7 @@ def build_report(out: Path = SITE) -> Path:
         for m in cmp_["mcnemar_per_seed"]
     )
     run_rows = "".join(
-        f"<tr><td>{r['model'].upper()}</td><td>{r['seed']}</td><td>{int(r['params']):,}</td>"
+        f"<tr><td>{NAMES[r['model']]}</td><td>{r['seed']}</td><td>{int(r['params']):,}</td>"
         f"<td>{r['best_epoch']}/{r['epochs_run']}</td><td>{_pct(float(r['val_accuracy']))}</td>"
         f"<td>{_pct(float(r['test_accuracy']))}</td><td>{r['test_errors']}</td>"
         f"<td>{float(r['test_nll']):.4f}</td><td>{_pct(float(r['test_ece']))}</td></tr>"
@@ -113,8 +120,8 @@ def build_report(out: Path = SITE) -> Path:
         "__BUDGET__": _pct(s["error_budget"], 1),
         "__MLP_COV__": _pct(mlp["error_budget_coverage_mean"], 1),
         "__CNN_COV__": _pct(cnn["error_budget_coverage_mean"], 1),
-        "__MLP_BERR__": _pct(mlp["error_budget_error_mean"], 2),
-        "__CNN_BERR__": _pct(cnn["error_budget_error_mean"], 2),
+        "__MLP_BERR__": _pct_sig(mlp["error_budget_error_mean"]),
+        "__CNN_BERR__": _pct_sig(cnn["error_budget_error_mean"]),
         "__MLP_ECE__": _pct(mlp["ece_mean"]),
         "__MLP_MAN__": _pct(1 - mlp["error_budget_coverage_mean"], 1),
         "__CNN_MAN__": _pct(1 - cnn["error_budget_coverage_mean"], 1),
@@ -122,6 +129,16 @@ def build_report(out: Path = SITE) -> Path:
         "__CNN_ORACLE__": _pct(cnn["error_budget_oracle_coverage_mean"], 1),
         "__SPREAD__": str(max(_spread(m) for m in ("mlp", "cnn"))),
         "__GAP__": f"{mlp['test_errors_mean'] - cnn['test_errors_mean']:.0f}",
+        "__WIDE_PARAMS__": f"{wide['params']:,}",
+        "__WIDE_ACC__": _pct(wide["test_accuracy_mean"]),
+        "__WIDE_STD__": _pct(wide["test_accuracy_std"]),
+        "__WIDE_ERR__": f"{wide['test_errors_mean']:.0f}",
+        "__WIDE_SHIFT2__": _pct(wide["shift_accuracy_mean"][2], 1),
+        "__WIDE_COV__": _pct(wide["error_budget_coverage_mean"], 1),
+        "__CAP_GAIN__": f"{cap['accuracy_gain_cnn_minus_mlp_wide'] * 100:.2f}",
+        "__CAP_LO__": f"{cap['bootstrap_95ci'][0] * 100:.2f}",
+        "__CAP_HI__": f"{cap['bootstrap_95ci'][1] * 100:.2f}",
+        "__CAP_PMAX__": f"{max(m['p_value'] for m in cap['mcnemar_per_seed']):.1g}",
         "__CNN_ECE__": _pct(cnn["ece_mean"]),
         "__MLP_CONF__": conf_list(mlp),
         "__CNN_CONF__": conf_list(cnn),
@@ -211,7 +228,7 @@ paired statistics, calibration, robustness to shifted inputs, and a concrete aut
 on the untouched 10,000-image test set. The <span class="amber">MLP</span> reaches __MLP_ACC__ ± __MLP_STD__,
 the <span class="teal">CNN</span> __CNN_ACC__ ± __CNN_STD__ (mean ± sd across seeds).</p>
 <div id="c-errors" class="chart" style="height:240px"></div>
-<p class="takeaway">Within a model, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
+<p class="takeaway">Within the MLP or the CNN, seeds move the error count by at most __SPREAD__ digits; switching architecture moves it by __GAP__.</p>
 <p>Is the gap real or test-set luck? Two paired checks on the same 10,000 images. A paired bootstrap over
 test images puts the gain at +__GAIN__ points (95% CI __CI_LO__ to __CI_HI__). McNemar's exact test, seed by
 seed, counts the digits only one model gets right: for seed 0, __MC_B__ digits only the MLP gets right
@@ -220,6 +237,12 @@ __PMAX__.</p>
 <div class="scroll"><table>
 <thead><tr><th>Seed</th><th>Only MLP right</th><th>Only CNN right</th><th>Both wrong</th><th>McNemar p</th></tr></thead>
 <tbody>__MC_ROWS__</tbody></table></div>
+<p><strong>Capacity or convolution?</strong> The CNN has about twice the MLP's parameters. A wider MLP
+(784-256-128-10, __WIDE_PARAMS__ parameters, more than the CNN) trained with the same recipe reaches
+__WIDE_ACC__ ± __WIDE_STD__, i.e. __WIDE_ERR__ errors: no better than the small MLP. The CNN beats it by
++__CAP_GAIN__ points (95% CI __CAP_LO__ to __CAP_HI__; largest McNemar p over seeds __CAP_PMAX__), and the wide MLP
+is no more tolerant of shifts (__WIDE_SHIFT2__ at 2 px); under the error budget of section 3 it automates
+__WIDE_COV__ of the stream. Parameter count does not explain the gap.</p>
 
 <h2>2. Robustness: move the digit a few pixels</h2>
 <p>MNIST digits are centred by centre of mass. Real inputs rarely are. Each test digit is shifted by
@@ -243,8 +266,10 @@ budget would allow __MLP_ORACLE__ and __CNN_ORACLE__. The 6,000-digit validation
 errors to calibrate a 0.1% threshold on, and the MLP pays more for that caution.</p>
 
 <h2>4. Can the confidences be trusted?</h2>
-<p>Expected calibration error (15 equal-width bins): MLP __MLP_ECE__, CNN __CNN_ECE__. Points on the
-diagonal mean "90% confident" is right about 90% of the time.</p>
+<p>Expected calibration error (15 equal-width bins, mean over seeds): MLP __MLP_ECE__, CNN __CNN_ECE__.
+Points on the diagonal mean "90% confident" is right about 90% of the time. The diagram pools the
+__NSEEDS__ seeds; over 93% of digits fall in the top bin, which dominates the ECE. Good calibration lets the
+score be read as a probability; the threshold rule of section 3 only needs the ranking of confidences.</p>
 <div id="c-rel" class="chart"></div>
 
 <h2>5. Where the errors are</h2>
@@ -261,8 +286,9 @@ diagonal mean "90% confident" is right about 90% of the time.</p>
 <h2>Limitations</h2>
 <ul>
 <li>__NSEEDS__ seeds per model is enough to show the seed spread is small next to the gap, not to estimate it precisely.</li>
-<li>Neither architecture is tuned (no augmentation, no learning-rate schedule, no hyper-parameter search); the comparison is between two textbook models of similar size, not between the best of each family.</li>
-<li>The translation test is synthetic; it isolates one property (shift sensitivity) rather than modelling a real capture process.</li>
+<li>Neither architecture is tuned (no augmentation, no learning-rate schedule, no hyper-parameter search); the comparison is between two textbook models of the same order of size (the CNN has about twice the parameters), not between the best of each family.</li>
+<li>Architecture and capacity are separated by one control only: the wide MLP matches the CNN's parameter count, but both MLPs use dropout and the CNN does not, and no regularisation was tuned for either.</li>
+<li>The translation test is synthetic; it isolates one property (shift sensitivity) rather than modelling a real capture process. Diagonal directions move <em>d</em> px along each axis, and at 4 px about a quarter of shifted digits lose some stroke at the border (98.7% of ink kept on average), so part of the 4 px drop is lost information, not fragility.</li>
 <li>The 0.1% budget threshold is set on 6,000 validation digits, i.e. about six tolerated errors, so it is itself noisy; the realised test error is reported next to it.</li>
 </ul>
 
@@ -339,7 +365,7 @@ function draw() {
 
   // 5. learning curves
   const seen = {};
-  Plotly.react("c-lc", Object.entries(D.lc).map(([k, v]) => {
+  Plotly.react("c-lc", Object.entries(D.lc).filter(([k]) => models.includes(k.split("|")[0])).map(([k, v]) => {
     const m = k.split("|")[0], first = !seen[m]; seen[m] = true;
     return { type: "scatter", mode: "lines+markers", name: NAME[m], legendgroup: m, showlegend: first,
       x: v.x, y: v.y, line: { color: C[m], width: 2 }, marker: { size: 6, color: C[m] },

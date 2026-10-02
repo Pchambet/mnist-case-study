@@ -15,11 +15,13 @@ import numpy as np
 
 from mnist_study.analyze import RESULTS
 from mnist_study.data import RAW_PATH, load_npz
+from mnist_study.models import MODEL_NAMES
 
 FIGURES = Path("docs/figures")
 INK, MUTED, GRID = "#0f172a", "#64748b", "#e2e8f0"
 COLORS = {"mlp": "#d97706", "cnn": "#0d9488"}
 LABELS = {"mlp": "MLP (109k params)", "cnn": "CNN (225k params)"}
+WIDE_LABEL = "Wide MLP (235k params)"
 
 plt.rcParams.update(
     {
@@ -68,17 +70,20 @@ def hero() -> Path:
     runs = _rows("runs.csv")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2), gridspec_kw={"width_ratios": [1, 1.5]})
 
-    for i, name in enumerate(("mlp", "cnn")):
+    # Bottom to top: CNN, the wide MLP (capacity control, same parameter count), MLP.
+    bars = [("cnn", LABELS["cnn"], COLORS["cnn"]), ("mlp_wide", WIDE_LABEL, MUTED)]
+    bars.append(("mlp", LABELS["mlp"], COLORS["mlp"]))
+    for i, (name, _, color) in enumerate(bars):
         errs = [int(r["test_errors"]) for r in runs if r["model"] == name]
         mean = np.mean(errs)
-        ax1.barh(i, mean, color=COLORS[name], height=0.55, alpha=0.9)
+        ax1.barh(i, mean, color=color, height=0.55, alpha=0.9)
         ax1.scatter(errs, [i] * len(errs), color=INK, s=14, zorder=3)
         ax1.text(max(errs) + 8, i, f"{mean:.0f} errors", va="center", color=INK, fontsize=10)
-    ax1.set_yticks([0, 1], [LABELS["mlp"], LABELS["cnn"]])
+    ax1.set_yticks(range(len(bars)), [label for _, label, _ in bars])
     ax1.set_xlabel("Misclassified test digits (of 10,000); dots = seeds")
     ax1.set_xlim(0, max(int(r["test_errors"]) for r in runs) * 1.35)
     ax1.grid(axis="y", visible=False)
-    ax1.set_title("Clean test set")
+    ax1.set_title("Clean test set\n(doubling the MLP's width does not help)")
 
     px = np.arange(len(s["models"]["mlp"]["shift_accuracy_mean"]))
     for name in ("mlp", "cnn"):
@@ -129,34 +134,36 @@ def risk_coverage() -> Path:
     s = _summary()
     curves = defaultdict(lambda: ([], []))
     for r in _rows("risk_coverage.csv"):
+        if r["model"] not in MODEL_NAMES:
+            continue
         curves[r["model"]][0].append(float(r["coverage"]) * 100)
         curves[r["model"]][1].append(float(r["selective_error"]) * 100)
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
-    offsets = {"mlp": (-30, 55), "cnn": (-20, 80)}
     for name, (cov, err) in curves.items():
         ax.plot(cov, err, color=COLORS[name], lw=2, label=LABELS[name])
         m = s["models"][name]
         c, e = m["error_budget_coverage_mean"] * 100, m["error_budget_error_mean"] * 100
         ax.scatter([c], [e], color=COLORS[name], s=60, zorder=3, edgecolor="white", lw=1.5)
-        ax.annotate(
-            f"{c:.1f}% automated\n(threshold set on validation)",
-            (c, e),
-            xytext=offsets[name],
-            textcoords="offset points",
-            ha="center",
-            color=INK,
-            fontsize=9.5,
-            arrowprops={"arrowstyle": "-", "color": MUTED, "lw": 0.8},
-        )
+    # A text key instead of arrows: any arrow to the CNN point would cross the MLP curve.
+    cov = {m: s["models"][m]["error_budget_coverage_mean"] for m in ("mlp", "cnn")}
+    ax.text(
+        51,
+        0.56,
+        "Dots: threshold chosen on validation, applied to test\n"
+        f"MLP {cov['mlp']:.1%} automated · CNN {cov['cnn']:.1%}",
+        color=INK,
+        fontsize=9.5,
+        va="top",
+    )
     budget = s["error_budget"] * 100
     ax.axhline(budget, color=MUTED, lw=1, ls="--")
     ax.text(
-        99.5,
+        50.5,
         budget,
         f"error budget {budget:.1f}%",
         color=MUTED,
         fontsize=9,
-        ha="right",
+        ha="left",
         va="bottom",
     )
     ax.set_xlabel("Coverage: share of digits accepted automatically (%)")
@@ -164,7 +171,6 @@ def risk_coverage() -> Path:
     ax.set_xlim(50, 100)
     ax.set_ylim(0, 0.8)
     ax.legend(frameon=False, loc="upper left")
-    cov = {m: s["models"][m]["error_budget_coverage_mean"] for m in ("mlp", "cnn")}
     ax.set_title(
         f"Holding errors to ≤{budget:.1f}%, the CNN reads {cov['cnn']:.0%} of digits "
         f"automatically, the MLP {cov['mlp']:.0%}"
@@ -193,8 +199,9 @@ def reliability() -> Path:
     axes[0].set_ylabel("Observed accuracy")
     fig.suptitle(
         "Both models are well calibrated: expected calibration error below "
-        f"{max(s['models'][m]['ece_mean'] for m in ('mlp', 'cnn')) * 100:.1f}% "
-        "(marker area = number of digits)",
+        f"{max(s['models'][m]['ece_mean'] for m in ('mlp', 'cnn')) * 100:.1f}%\n"
+        f"ECE is the mean over seeds; the diagram pools the {len(s['models']['mlp']['seeds'])} "
+        "seeds (marker area = number of digits)",
         x=0.01,
         ha="left",
         fontsize=11.5,
@@ -208,6 +215,8 @@ def learning_curves() -> Path:
     fig, ax = plt.subplots(figsize=(7.5, 4))
     by = defaultdict(lambda: ([], []))
     for r in _rows("learning_curves.csv"):
+        if r["model"] not in MODEL_NAMES:
+            continue
         key = (r["model"], r["seed"])
         by[key][0].append(int(r["epoch"]))
         by[key][1].append(float(r["val_loss"]))
