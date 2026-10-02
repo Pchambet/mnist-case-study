@@ -78,7 +78,9 @@ def hero() -> Path:
         errs = [int(r["test_errors"]) for r in runs if r["model"] == name]
         mean = np.mean(errs)
         ax1.barh(i, mean, color=color, height=0.55, alpha=0.9)
-        ax1.scatter(errs, [i] * len(errs), color=INK, s=14, zorder=3)
+        # Seeds offset vertically, so two seeds with the same error count stay two visible dots.
+        offsets = (np.arange(len(errs)) - (len(errs) - 1) / 2) * 0.13
+        ax1.scatter(errs, i + offsets, color=INK, s=14, zorder=3)
         # Inside the bar, away from the seed dots near its end, so the label reads as the mean.
         ax1.text(6, i, f"{mean:.0f} errors", va="center", color="white", fontsize=10, weight="bold")
     ax1.set_yticks(range(len(bars)), [label for _, label, _ in bars])
