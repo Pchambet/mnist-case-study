@@ -52,7 +52,7 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
     for name in MODEL_NAMES:
         seeds = _seeds(name, root)
         accs, eces, nlls, shift_acc, budget_runs, rc_risk = [], [], [], [], [], []
-        correct_seeds, conf_pool, corr_pool = [], [], []
+        correct_seeds, conf_pool = [], []
         cm = np.zeros((10, 10), dtype=int)
         for seed in seeds:
             _, meta_path, preds_path = run_paths(name, seed, root)
@@ -72,7 +72,6 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             nlls.append(loss)
             correct_seeds.append(correct)
             conf_pool.append(conf)
-            corr_pool.append(correct)
             cm += M.confusion_matrix(y_test, pred)
 
             # Error-budget rule: threshold fixed on validation, applied to test.
@@ -131,7 +130,7 @@ def analyze(root: Path = INTERIM, out: Path = RESULTS) -> dict:
             )
 
         mean_conf, bin_acc, counts = M.reliability_bins(
-            np.concatenate(conf_pool), np.concatenate(corr_pool)
+            np.concatenate(conf_pool), np.concatenate(correct_seeds)
         )
         for b, (mc, ba, c) in enumerate(zip(mean_conf, bin_acc, counts, strict=True)):
             if c:
